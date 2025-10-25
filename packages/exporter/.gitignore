@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+*.log
+.DS_Store
+tmp/
+temp/
+*.mp4
+*.mov
+*.webm
+*.wav
+frames/
+timeline.json
+webgal-export-*/

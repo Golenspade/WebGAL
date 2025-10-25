@@ -18,6 +18,7 @@ console.log(env);
   const pixiPerformManagerDirPath = './src/Core/util/pixiPerformManager/';
   const relativePath = relative(pixiPerformManagerDirPath, pixiPerformScriptDirPath).replaceAll('\\', '/');
   let lastFiles: string[] = [];
+  const enablePixiWatch = process.env.WEBGAL_PIXI_WATCH !== '0';
 
   function setInitFile() {
     console.log('正在自动编写pixi特效依赖注入');
@@ -45,7 +46,16 @@ console.log(env);
 
   getPixiPerformScriptFiles();
 
-  if (env !== 'production') watch(pixiPerformScriptDirPath, { encoding: 'utf-8' }, getPixiPerformScriptFiles);
+  if (env !== 'production' && enablePixiWatch) {
+    try {
+      watch(pixiPerformScriptDirPath, { encoding: 'utf-8' }, getPixiPerformScriptFiles);
+    } catch (e: any) {
+      console.warn(
+        '[vite] Failed to watch Pixi performs dir. You can disable with WEBGAL_PIXI_WATCH=0. Error:',
+        e?.message || e,
+      );
+    }
+  }
 })();
 
 export default defineConfig({
@@ -62,6 +72,23 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve('src'),
+    },
+  },
+  server: {
+    watch: {
+      // Allow opting into polling to reduce native watchers if hitting EMFILE
+      usePolling: process.env.CHOKIDAR_USEPOLLING === '1',
+      interval: process.env.CHOKIDAR_INTERVAL ? Number(process.env.CHOKIDAR_INTERVAL) : 200,
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/output/**',
+        '**/raw-video/**',
+        '**/frames/**',
+        '**/audio/**',
+      ],
     },
   },
   build: {
