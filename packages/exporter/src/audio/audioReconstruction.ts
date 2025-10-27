@@ -20,7 +20,10 @@ export class AudioReconstruction {
    */
   buildAudioTracks(events: TimelineEvent[]): AudioTrack[] {
     const tracks: AudioTrack[] = [];
-    const audioEvents = events.filter((e) => e.type === 'bgm' || e.type === 'vocal' || e.type === 'se');
+    // Include video_audio and ui_se events
+    const audioEvents = events.filter((e) =>
+      e.type === 'bgm' || e.type === 'vocal' || e.type === 'se' || e.type === 'video_audio' || e.type === 'ui_se'
+    );
 
     for (const event of audioEvents) {
       const audioData = event.data as AudioData;
@@ -45,8 +48,12 @@ export class AudioReconstruction {
         }
       }
 
+      // Normalize video and ui_se to 'se' type for mixing
+      const normalizedType =
+        (audioData.audioType === 'video' || audioData.audioType === 'ui_se') ? 'se' : audioData.audioType;
+
       const track: AudioTrack = {
-        type: audioData.audioType,
+        type: normalizedType as 'bgm' | 'vocal' | 'se',
         filePath,
         startTime,
         duration,

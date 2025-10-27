@@ -41,7 +41,7 @@ export interface BranchScript {
 
 export interface TimelineEvent {
   /** Event type */
-  type: 'perform' | 'bgm' | 'vocal' | 'se' | 'scene_start' | 'scene_end';
+  type: 'perform' | 'bgm' | 'vocal' | 'se' | 'video_audio' | 'ui_se' | 'scene_start' | 'scene_end';
   /** Start time in milliseconds */
   startTime: number;
   /** Duration in milliseconds */
@@ -67,7 +67,7 @@ export interface PerformData {
 
 export interface AudioData {
   /** Audio type */
-  audioType: 'bgm' | 'vocal' | 'se';
+  audioType: 'bgm' | 'vocal' | 'se' | 'video' | 'ui_se';
   /** Asset URL */
   url: string;
   /** Volume (0-100) */

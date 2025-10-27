@@ -154,11 +154,9 @@ export class WebGALExporter {
       // Launch browser with video recording enabled
       const page = await browser.initialize(true, videoDir);
 
-      // Set up deterministic input
-      if (this.config.branchScript) {
-        const deterministicInput = new DeterministicInput(page, this.config.branchScript, this.config.verbose);
-        await deterministicInput.initialize();
-      }
+      // Set up deterministic input (always inject for auto-advance and title click)
+      const deterministicInput = new DeterministicInput(page, this.config.branchScript, this.config.verbose);
+      await deterministicInput.initialize();
 
       // Load scene
       await browser.loadScene(this.config.scenePath);
