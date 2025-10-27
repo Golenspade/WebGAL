@@ -34,9 +34,12 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
     }
   }, 100);
 
-  // Auto-advance dialogue by calling nextSentence directly
+  // Auto-advance dialogue with cooldown and success confirmation
   // This helps progress through say commands that block on user input
   window.__AUTO_ADVANCE_ENABLED__ = true;
+  window.__LAST_ADVANCE_AT__ = 0;
+  window.__LAST_SENTENCE_ID__ = -1;
+  window.__FAILED_ADVANCE_COUNT__ = 0;
 
   const waitForWebGAL = setInterval(() => {
     if (!window.WebGAL?.gameplay) return;
@@ -46,6 +49,7 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       if (!window.__AUTO_ADVANCE_ENABLED__) return;
 
       const controller = window.WebGAL.gameplay.performController;
+      const sceneData = window.WebGAL.sceneManager?.sceneData;
       const hasActivePerforms = controller?.performList?.length > 0;
 
       // Check if we're at title screen
@@ -57,6 +61,28 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       const hasChoice = document.querySelector('.Choose_item') !== null;
       // @ts-expect-error - document is available in browser context
       const hasInput = document.querySelector('#user-input') !== null;
+
+      // Cooldown mechanism: prevent rapid-fire advances
+      const COOLDOWN_MS = 600; // Minimum time between advances
+      const BACKOFF_MS = 2000;  // Backoff time after failed advances
+      const now = Date.now();
+
+      // If we failed to advance multiple times, use longer backoff
+      const cooldown = window.__FAILED_ADVANCE_COUNT__ >= 3 ? BACKOFF_MS : COOLDOWN_MS;
+      if (now - window.__LAST_ADVANCE_AT__ < cooldown) {
+        return; // Still in cooldown period
+      }
+
+      // Check if sentence ID changed (advance was successful)
+      const currentSentenceId = sceneData?.currentSentenceId ?? -1;
+      if (window.__LAST_SENTENCE_ID__ !== -1 && currentSentenceId === window.__LAST_SENTENCE_ID__) {
+        // Sentence didn't change, increment failed count
+        window.__FAILED_ADVANCE_COUNT__++;
+      } else if (currentSentenceId !== window.__LAST_SENTENCE_ID__) {
+        // Sentence changed, reset failed count
+        window.__FAILED_ADVANCE_COUNT__ = 0;
+        window.__LAST_SENTENCE_ID__ = currentSentenceId;
+      }
 
       // If there are no active performs, not at title screen, and no interactive elements,
       // try to advance to next sentence
@@ -87,6 +113,9 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
             // @ts-expect-error - document is available in browser context
             document.dispatchEvent(eventUp);
           }, 50);
+
+          // Record advance attempt
+          window.__LAST_ADVANCE_AT__ = now;
         } catch (e) {
           console.error('[Auto] Failed to advance:', e);
         }
