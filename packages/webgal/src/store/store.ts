@@ -19,5 +19,12 @@ export const webgalStore = configureStore({
   }),
 });
 
+// Expose store to window for automation/testing (avoids circular import in WebGAL.ts)
+if (typeof window !== 'undefined') {
+  // @ts-ignore
+  (window as any).webgalStore = webgalStore;
+}
+
+
 // 在 TS 中的类型声明
 export type RootState = ReturnType<typeof webgalStore.getState>;
