@@ -42,14 +42,22 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
   window.__FAILED_ADVANCE_COUNT__ = 0;
 
   const waitForWebGAL = setInterval(() => {
-    if (!window.WebGAL?.gameplay) return;
+    // @ts-expect-error - WebGAL is available in browser context
+    if (typeof WebGAL === 'undefined' || !WebGAL.gameplay?.performController) {
+      return;
+    }
+    clearInterval(waitForWebGAL);
+
+    console.log('[Auto] WebGAL loaded, starting auto-advance mechanism');
 
     // WebGAL is loaded, start auto-advance
     const autoAdvanceInterval = setInterval(() => {
       if (!window.__AUTO_ADVANCE_ENABLED__) return;
 
-      const controller = window.WebGAL.gameplay.performController;
-      const sceneData = window.WebGAL.sceneManager?.sceneData;
+      // @ts-expect-error - WebGAL is available in browser context
+      const controller = WebGAL.gameplay.performController;
+      // @ts-expect-error - WebGAL is available in browser context
+      const sceneData = WebGAL.sceneManager?.sceneData;
       const hasActivePerforms = controller?.performList?.length > 0;
 
       // Check if we're at title screen
@@ -88,6 +96,7 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       // If there are no active performs, not at title screen, and no interactive elements,
       // try to advance to next sentence
       if (!hasActivePerforms && !showTitle && !hasChoice && !hasInput) {
+        console.log('[Auto] Advancing... (sentence:', currentSentenceId, 'failed:', window.__FAILED_ADVANCE_COUNT__, ')');
         try {
           // Simulate space key press to trigger the hotkey handler
           const event = new KeyboardEvent('keydown', {
@@ -122,9 +131,13 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
         }
       }
     }, 300); // Check every 300ms
-
-    clearInterval(waitForWebGAL);
   }, 100);
+
+  // Stop timeout after 30 seconds
+  setTimeout(() => {
+    clearInterval(waitForWebGAL);
+    console.warn('[Auto] Timeout waiting for WebGAL');
+  }, 30000);
 
   // Wait for WebGAL to load
   const waitForChoice = setInterval(() => {
