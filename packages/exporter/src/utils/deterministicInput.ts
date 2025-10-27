@@ -52,11 +52,15 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       const GUIState = window.webgalStore?.getState?.()?.GUI;
       const showTitle = GUIState?.showTitle;
 
-      // If there are no active performs and we're not at title screen,
+      // Check if there are interactive elements (choices or inputs)
+      // @ts-expect-error - document is available in browser context
+      const hasChoice = document.querySelector('.Choose_item') !== null;
+      // @ts-expect-error - document is available in browser context
+      const hasInput = document.querySelector('#user-input') !== null;
+
+      // If there are no active performs, not at title screen, and no interactive elements,
       // try to advance to next sentence
-      if (!hasActivePerforms && !showTitle) {
-        // Directly call nextSentence (exposed via WebGAL)
-        // This is safer than simulating keyboard events
+      if (!hasActivePerforms && !showTitle && !hasChoice && !hasInput) {
         try {
           // Simulate space key press to trigger the hotkey handler
           const event = new KeyboardEvent('keydown', {
@@ -67,6 +71,7 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
             bubbles: true,
             cancelable: true
           });
+          // @ts-expect-error - document is available in browser context
           document.dispatchEvent(event);
 
           // Also dispatch keyup to prevent lock
@@ -79,6 +84,7 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
               bubbles: true,
               cancelable: true
             });
+            // @ts-expect-error - document is available in browser context
             document.dispatchEvent(eventUp);
           }, 50);
         } catch (e) {
