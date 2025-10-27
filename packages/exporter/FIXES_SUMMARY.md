@@ -101,6 +101,35 @@
 
 ---
 
+---
+
+### P0-4: 输出 MP4 无法播放（空/损坏容器）修复 ✅
+
+**问题表现**：
+- 导出产物存在，但大小异常（例如 ~261B），播放器/查看器提示 “failed to load image data” 或无法解析时长/码率。
+
+**根因分析**：
+- 时间线中的音频 URL（如 `http://localhost:3002/game/vocal/v1.wav`）在重建阶段被错误地当作相对路径拼接，导致 ffmpeg 输入文件指向不存在的磁盘路径；
+- 在某些情况下会导致音频混合/复用阶段提前失败或写出空容器文件。
+
+**修复内容**：
+1) 统一解析音频路径（URL -> 本地文件）
+   - 去除 `http(s)://host` 前缀，仅保留路径部分
+   - 映射 `game/...` 到 `packages/webgal/public/game/...`
+   - 映射 `src/...`（UI SE）到 `packages/webgal/src/...`
+2) 修正资源基路径
+   - `exporter` 传入音频资源根目录改为仓库内真实路径：`packages/webgal/public/game`
+
+**修改文件**：
+- `packages/exporter/src/audio/audioReconstruction.ts`（新增 `resolveAudioPath` 规范化逻辑）
+- `packages/exporter/src/exporter.ts`（assetsBase 指向仓库内 `packages/webgal/public/game`）
+
+**预期结果**：
+- ffmpeg 能正确读取音频输入并完成混音；
+- 最终 MP4 具备有效的视频/音频轨（`ffprobe` 可见 streams 与时长）；
+- 常见播放器可正常播放。
+
+
 ## 测试建议
 
 ### 测试场景 1：基本对话
@@ -210,7 +239,7 @@ playVideo:video.mp4;
 const autoAdvanceInterval = setInterval(() => {
   const hasActivePerforms = controller?.performList?.length > 0;
   const showTitle = GUIState?.showTitle;
-  
+
   if (!hasActivePerforms && !showTitle) {
     // 模拟空格键按下/释放
     document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 32 }));
@@ -227,7 +256,7 @@ const autoAdvanceInterval = setInterval(() => {
 if (script?.command === 34) { // commandType.playEffect
   const url = script.content;
   const volume = script.args?.find(arg => arg.key === 'volume')?.value || 100;
-  
+
   window.__logTimelineEvent__({
     type: 'se',
     startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
