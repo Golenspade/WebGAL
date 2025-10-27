@@ -304,6 +304,8 @@ export async function waitForSceneComplete(page: any, timeoutMs = 60000): Promis
   const startTime = Date.now();
   let lastActivityTime = Date.now();
   let lastSentenceId = -1;
+  let lastSentenceChangeAt = Date.now();
+
   let idleCount = 0;
   const IDLE_THRESHOLD = 30; // 30 checks * 100ms = 3 seconds of idle
 
@@ -328,7 +330,8 @@ export async function waitForSceneComplete(page: any, timeoutMs = 60000): Promis
       // Check if scene has ended (reached end of sentence list)
       const currentSentenceId = sceneData?.currentSentenceId || 0;
       const totalSentences = sceneData?.currentScene?.sentenceList?.length || 0;
-      const hasActivePerforms = controller.performList?.length > 0;
+      const activeNonHoldPerforms = (controller.performList || []).filter((p: any) => !p.isHoldOn && !p.skipNextCollect);
+      const hasActivePerforms = activeNonHoldPerforms.length > 0;
 
       // Check for audio activity
       // @ts-expect-error - document is available in browser context
@@ -355,9 +358,19 @@ export async function waitForSceneComplete(page: any, timeoutMs = 60000): Promis
       return;
     }
 
+    // Debug status (verbose): sentence progress and activity
+    try {
+      const sinceChange = Date.now() - lastSentenceChangeAt;
+      console.log(`[Exporter][Status] id=${status.currentSentenceId}/${status.totalSentences} atEnd=${status.atEnd} hasActive=${status.hasActivePerforms} hasAudio=${status.hasAudioActivity} idleCount=${idleCount} lastChangeAgo=${sinceChange}ms`);
+    } catch {}
+
+
     // Track activity
     const hasActivity = status.hasActivePerforms || status.hasAudioActivity;
     const sentenceChanged = status.currentSentenceId !== lastSentenceId;
+    if (sentenceChanged) {
+      lastSentenceChangeAt = Date.now();
+    }
 
     if (hasActivity || sentenceChanged) {
       lastActivityTime = Date.now();
@@ -368,6 +381,14 @@ export async function waitForSceneComplete(page: any, timeoutMs = 60000): Promis
     }
 
     // If we've been idle for long enough AND we're at the end of the scene, consider it complete
+    // End-of-scene guard: if sentence hasn't progressed for a while at end, finish regardless of background activity
+    const SENTENCE_STALL_MS = 5000;
+    if (status.atEnd && Date.now() - lastSentenceChangeAt >= SENTENCE_STALL_MS) {
+      console.log('[Exporter] Scene complete: no sentence progress at end of scene');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return;
+    }
+
     if (idleCount >= IDLE_THRESHOLD && status.atEnd) {
       console.log('[Exporter] Scene complete: sustained idle at end of scene');
       await new Promise((resolve) => setTimeout(resolve, 1000));

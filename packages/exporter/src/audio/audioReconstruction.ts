@@ -77,11 +77,28 @@ export class AudioReconstruction {
    * Resolve audio file path from URL
    */
   private resolveAudioPath(url: string): string {
-    // Remove leading slash and 'game/' prefix if present
-    let relativePath = url.replace(/^\//, '').replace(/^game\//, '');
+    // Normalize URL: strip protocol/host if present
+    let normalized = url || '';
+    if (/^https?:\/\//.test(normalized)) {
+      normalized = normalized.replace(/^https?:\/\/[^/]+/, '');
+    }
+    // Remove leading slash
+    normalized = normalized.replace(/^\//, '');
 
-    // Resolve to absolute path
-    return resolve(this.gameAssetsPath, relativePath);
+    // If it points into the game's public assets (game/...), resolve under game dir
+    if (/^game\//.test(normalized)) {
+      const relativePath = normalized.replace(/^game\//, '');
+      return resolve(this.gameAssetsPath, relativePath);
+    }
+
+    // Handle WebGAL source asset paths (e.g., src/assets/se/click.mp3)
+    if (/^src\//.test(normalized)) {
+      // Assume repo root is process.cwd(); map to packages/webgal/<normalized>
+      return resolve(process.cwd(), 'packages/webgal', normalized);
+    }
+
+    // Otherwise, treat as already relative to game dir
+    return resolve(this.gameAssetsPath, normalized);
   }
 
   /**

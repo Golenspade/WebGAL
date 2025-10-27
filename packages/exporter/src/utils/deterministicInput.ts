@@ -68,12 +68,17 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       const hasActivePerforms = controller?.performList?.length > 0;
 
       // Check if we're at title screen
-      const GUIState = window.webgalStore?.getState?.()?.GUI;
+      const hasStore = !!window.webgalStore && typeof window.webgalStore.getState === 'function';
+      if (!hasStore && (window.__AUTO_DEBUG__ ?? true)) {
+        console.warn('[Auto] webgalStore not available on window');
+      }
+      const GUIState = hasStore ? window.webgalStore.getState().GUI : undefined;
       const showTitle = GUIState?.showTitle;
 
       // Check if there are interactive elements (choices or inputs)
-      const hasChoice = document.querySelector('.Choose_item') !== null;
-      const hasInput = document.querySelector('#user-input') !== null;
+      const chooseContainer = document.getElementById('chooseContainer');
+      const hasChoice = !!(chooseContainer && chooseContainer.querySelector('[class*="Choose_item"]:not([class*="Choose_item_disabled"])'));
+      const hasInput = !!(chooseContainer && chooseContainer.querySelector('#user-input'));
 
       // Cooldown mechanism: prevent rapid-fire advances
       // Configurable via window.__AUTO_COOLDOWN__ and window.__AUTO_BACKOFF__ for DP-1.4 integration
@@ -98,34 +103,155 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
         window.__LAST_SENTENCE_ID__ = currentSentenceId;
       }
 
-      // If there are no active performs, not at title screen, and no interactive elements,
-      // try to advance to next sentence
-      if (!hasActivePerforms && !showTitle && !hasChoice && !hasInput) {
+      // Handle interactive elements first
+      if (!showTitle && hasChoice) {
+        const choiceIndex = window.__AUTO_RESPONSES__.choiceIndex;
+        const selectedOption = window.__AUTO_RESPONSES__.choices[choiceIndex] ?? 0;
+        const nodeList = document.querySelectorAll('#chooseContainer [class*="Choose_item"]:not([class*="Choose_item_disabled"])');
+        const choices = Array.prototype.slice.call(nodeList);
+        if (choices.length > 0) {
+          const idx = Math.min(selectedOption, choices.length - 1);
+          console.log('[Auto] Selecting choice', choiceIndex, 'option', idx);
+          // Use native click to ensure React onClick fires reliably
+          choices[idx].click();
+          window.__AUTO_RESPONSES__.choiceIndex++;
+          window.__LAST_ADVANCE_AT__ = now;
+
+          // Fallback: if sentence ID didn't change, programmatically jump to target label
+          setTimeout(() => {
+            try {
+              const sceneData = WebGAL?.sceneManager?.sceneData;
+              if (!sceneData) return;
+              const unchanged = sceneData.currentSentenceId === (window.__LAST_SENTENCE_ID__ ?? -1);
+              const stillHasChoice = !!document.querySelector('#chooseContainer [class*="Choose_item"]');
+              if (!unchanged && !stillHasChoice) return;
+              const list = sceneData.currentScene?.sentenceList || [];
+              const current = list[sceneData.currentSentenceId];
+              if (!current) return;
+              const raw = (current.commandRaw || '').trim();
+              console.log('[Auto][Fallback] currentSentenceId=', sceneData.currentSentenceId, 'command=', current.command, 'commandRaw=', raw, 'content=', current.content);
+              // Expect like: "choose:Text1:label1|Text2:label2;"
+              let jumpLabel = '';
+              if (/^choose:/.test(raw)) {
+                const rawBody = raw.replace(/^choose:/, '').replace(/;\s*$/, '');
+                const parts = rawBody.split(/(?<!\\\\)\\|/);
+                const pick = parts[idx] || parts[0] || '';
+                const main = pick.split('->').length > 1 ? pick.split('->')[1] : pick;
+                const nodes = main.split(/(?<!\\\\):/);
+                jumpLabel = (nodes[1] || '').trim();
+                console.log('[Auto][Fallback] parsed jumpLabel from choose:', jumpLabel, 'pick=', pick);
+              }
+              let target = sceneData.currentSentenceId;
+              if (!jumpLabel) {
+                // Fallback 2: find the first forward label line
+                for (let i = sceneData.currentSentenceId + 1; i < list.length; i++) {
+                  const s = list[i];
+                  const r = (s?.commandRaw || '').trim();
+                  if (r.startsWith('label:')) {
+                    target = i;
+                    jumpLabel = s.content || r.replace(/^label:/, '').replace(/;\s*$/, '');
+                    console.log('[Auto][Fallback] using first forward label as target:', jumpLabel, 'at', target);
+                    break;
+                  }
+                }
+              } else {
+                // Normal path: find the specified label
+                for (let i = 0; i < list.length; i++) {
+                  const s = list[i];
+                  const r = (s?.commandRaw || '').trim();
+                  if (r.startsWith('label:') && s.content === jumpLabel && i !== sceneData.currentSentenceId) {
+                    target = i;
+                    break;
+                  }
+                }
+              }
+              console.log('[Auto][Fallback] set currentSentenceId', target, 'label=', jumpLabel);
+              sceneData.currentSentenceId = target;
+              try { WebGAL.gameplay.performController?.unmountPerform?.('choose'); } catch (_){ }
+              setTimeout(() => {
+                try { WebGAL.gameplay.performController?.goNextWhenOver?.(); } catch (_){ }
+                try { document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true })); } catch (_) {}
+              }, 1);
+            } catch (e) {
+              console.warn('[Auto] Fallback jmp failed:', e);
+            }
+          }, 200);
+        }
+        return;
+      }
+
+      if (!showTitle && hasInput) {
+        const inputIndex = window.__AUTO_RESPONSES__.inputIndex;
+        const inputValue = window.__AUTO_RESPONSES__.inputs[inputIndex] || '';
+        const inputField = document.querySelector('#user-input');
+        const submitButton = document.querySelector('#chooseContainer [class*="button"]');
+        if (inputField) {
+          try { inputField.value = inputValue; } catch (_) {}
+          inputField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (submitButton) {
+          console.log('[Auto] Filling input', inputIndex, 'with', inputValue);
+          setTimeout(() => {
+            // Use native click to ensure React onClick fires reliably
+            submitButton.click();
+          }, 50);
+          window.__AUTO_RESPONSES__.inputIndex++;
+          window.__LAST_ADVANCE_AT__ = now;
+        }
+        return;
+      }
+
+      // Advance when not at title and no interactive elements. Even if performs are active,
+      // we simulate user pressing Space which stops performs (useHotkey.stopAll) before nextSentence.
+      if (!showTitle) {
+        const details = {
+          showTitle,
+          showMenuPanel: GUIState?.showMenuPanel,
+          showBacklog: GUIState?.showBacklog,
+          showPanicOverlay: GUIState?.showPanicOverlay,
+          showTextBox: GUIState?.showTextBox,
+          hasActivePerforms,
+          currentSentenceId,
+        };
         console.log('[Auto] Advancing... (sentence:', currentSentenceId, 'failed:', window.__FAILED_ADVANCE_COUNT__, ')');
+        console.log('[Auto] State check:', details);
         try {
-          // Simulate space key press to trigger the hotkey handler
-          const event = new KeyboardEvent('keydown', {
+          // Ensure backlog closed and textbox visible to avoid gating
+          if (hasStore) {
+            if (GUIState?.showBacklog) {
+              window.webgalStore.dispatch({ type: 'gui/setVisibility', payload: { component: 'showBacklog', visibility: false } });
+            }
+            if (GUIState?.showTextBox === false) {
+              window.webgalStore.dispatch({ type: 'gui/setVisibility', payload: { component: 'showTextBox', visibility: true } });
+            }
+          }
+
+          // Try 1: Simulate space key press to trigger the hotkey handler
+          const evDown = new KeyboardEvent('keydown', {
             key: ' ',
             code: 'Space',
-            keyCode: 32,
-            which: 32,
+            // keyCode/which are readonly in modern browsers; included for legacy handlers
             bubbles: true,
             cancelable: true
           });
-          document.dispatchEvent(event);
+          Object.defineProperty(evDown, 'keyCode', { get: () => 32 });
+          Object.defineProperty(evDown, 'which', { get: () => 32 });
+          document.dispatchEvent(evDown);
 
-          // Also dispatch keyup to prevent lock
+          // Also dispatch keyup to release lock
           setTimeout(() => {
-            const eventUp = new KeyboardEvent('keyup', {
+            const evUp = new KeyboardEvent('keyup', {
               key: ' ',
               code: 'Space',
-              keyCode: 32,
-              which: 32,
               bubbles: true,
               cancelable: true
             });
-            document.dispatchEvent(eventUp);
+            Object.defineProperty(evUp, 'keyCode', { get: () => 32 });
+            Object.defineProperty(evUp, 'which', { get: () => 32 });
+            document.dispatchEvent(evUp);
           }, 50);
+
+          // Try 2 removed: Wheel fallback can unintentionally open backlog; rely on Space only
 
           // Record advance attempt
           window.__LAST_ADVANCE_AT__ = now;
@@ -153,25 +279,25 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
           if (node.nodeType === 1) { // Element node
             const element = node;
 
-            // Check if it's a choice dialog (actual class name is Choose_item with underscore)
-            if (element.classList?.contains('Choose_Main') ||
-                element.querySelector?.('.Choose_item')) {
+            // Check if a choice dialog appeared inside #chooseContainer
+            if (element.id === 'chooseContainer' || element.querySelector?.('#chooseContainer') || element.querySelector?.('[class*="Choose_item"]')) {
 
               setTimeout(() => {
                 const choiceIndex = window.__AUTO_RESPONSES__.choiceIndex;
                 const selectedOption = window.__AUTO_RESPONSES__.choices[choiceIndex] || 0;
 
-                // Find choice buttons (actual class name is Choose_item, not ChooseItem)
-                const choices = document.querySelectorAll('.Choose_item:not(.Choose_item_disabled)');
-                if (choices[selectedOption]) {
-                  console.log('[Auto] Selecting choice', choiceIndex, 'option', selectedOption);
-                  choices[selectedOption].click();
+                // Find choice buttons inside chooseContainer (CSS Modules friendly)
+                const choices = document.querySelectorAll('#chooseContainer [class*="Choose_item"]:not([class*="Choose_item_disabled"])');
+                if (choices.length > 0) {
+                  const idx = Math.min(selectedOption, choices.length - 1);
+                  console.log('[Auto] Selecting choice', choiceIndex, 'option', idx);
+                  choices[idx].click();
                   window.__AUTO_RESPONSES__.choiceIndex++;
                 }
               }, 100);
             }
 
-            // Check if it's an input dialog (uses #user-input and .button)
+            // Check if it's an input dialog (uses #user-input and CSS Modules .button)
             if (element.querySelector?.('#user-input')) {
 
               setTimeout(() => {
@@ -180,12 +306,12 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
 
                 // Find input field (ID is user-input)
                 const inputField = document.querySelector('#user-input');
-                // Find submit button (class is .button in getUserInput.module.scss)
-                const submitButton = element.querySelector('.button');
+                // Find submit button (class name is CSS Modules based)
+                const submitButton = document.querySelector('#chooseContainer [class*="button"]');
 
                 if (inputField && submitButton) {
                   console.log('[Auto] Filling input', inputIndex, 'with', inputValue);
-                  inputField.value = inputValue;
+                  try { inputField.value = inputValue; } catch (_) {}
 
                   // Trigger input event
                   inputField.dispatchEvent(new Event('input', { bubbles: true }));

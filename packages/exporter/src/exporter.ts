@@ -158,6 +158,20 @@ export class WebGALExporter {
       const deterministicInput = new DeterministicInput(page, this.config.branchScript, this.config.verbose);
       await deterministicInput.initialize();
 
+      // Apply CLI runtime overrides for DP-1.4 (cooldown/backoff/textSpeed)
+      if (typeof this.config.autoSpeed === 'number') {
+        await page.evaluate((ms: number) => {
+          // @ts-expect-error - window is available in browser context
+          window.__AUTO_COOLDOWN__ = Math.max(200, ms);
+        }, this.config.autoSpeed);
+      }
+      if (typeof this.config.textSpeed === 'number') {
+        await page.evaluate((speed: number) => {
+          // @ts-expect-error - window is available in browser context
+          window.__TEXT_SPEED__ = speed;
+        }, this.config.textSpeed);
+      }
+
       // Load scene
       await browser.loadScene(this.config.scenePath);
 
@@ -217,7 +231,9 @@ export class WebGALExporter {
    * Returns null if no audio tracks found
    */
   private async reconstructAudio(timeline: TimelineEvent[]): Promise<string | null> {
-    const audioReconstruction = new AudioReconstruction('./game', this.config.verbose);
+    // Resolve game assets base to packages/webgal/public/game (repo path)
+    const assetsBase = join(process.cwd(), 'packages/webgal/public/game');
+    const audioReconstruction = new AudioReconstruction(assetsBase, this.config.verbose);
 
     // Build audio tracks
     const tracks = audioReconstruction.buildAudioTracks(timeline);

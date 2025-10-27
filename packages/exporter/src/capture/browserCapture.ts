@@ -65,7 +65,8 @@ export class BrowserCapture {
     if (verbose) {
       this.page.on('console', (msg) => {
         const text = msg.text();
-        if (text.startsWith('[Timeline]') || text.startsWith('[Exporter]')) {
+        // Show key exporter logs from injected scripts
+        if (/^\[(Timeline|Exporter|Auto)\]/.test(text)) {
           console.log('[Browser]', text);
         }
       });
@@ -119,12 +120,20 @@ export class BrowserCapture {
     );
 
     // Load the scene using the exposed API
-    const sceneLoaded = await this.page.evaluate((path) => {
+    const sceneLoaded = await this.page.evaluate((absPath) => {
+      // Normalize to a web-served path if an absolute filesystem path was provided
+      let webPath = absPath;
+      const marker = '/game/scene/';
+      const idx = absPath.lastIndexOf(marker);
+      if (idx !== -1) {
+        webPath = absPath.substring(idx); // e.g., /game/scene/demo_zh_cn.txt
+      }
+
       // @ts-expect-error - window is available in browser context
       if (typeof window.__webgal_changeScene === 'function') {
-        const sceneName = path.split('/').pop()?.replace('.txt', '') ?? 'scene';
+        const sceneName = webPath.split('/').pop()?.replace('.txt', '') ?? 'scene';
         // @ts-expect-error - window is available in browser context
-        window.__webgal_changeScene(path, sceneName);
+        window.__webgal_changeScene(webPath, sceneName);
         return true;
       }
 
@@ -136,6 +145,15 @@ export class BrowserCapture {
     if (!sceneLoaded && verbose) {
       console.warn('[Browser] Scene loading API not available, continuing with default scene');
     }
+
+    // Hide title screen if helper is available (prevents hotkey gating)
+    await this.page.evaluate(() => {
+      // @ts-expect-error - browser context
+      if (typeof window.__webgal_hideTitle === 'function') {
+        // @ts-expect-error - browser context
+        window.__webgal_hideTitle();
+      }
+    });
 
     // Wait for scene to start
     await this.page.waitForFunction(
