@@ -25,12 +25,13 @@
 
 ## 1. 执行流打通（P0）
 
-- DP-1.1 标题页自动进入
-  - 修改点：在 BrowserCapture.initialize 后，page.goto 成功后注入脚本，自动点击 '.title__enter-game-target'，并在 GUI.showTitle==false 前保持重试
-  - 验收：不手动点击可进入游戏
-  - 单测：JSDOM 单测（模拟按钮存在时会触发 click 计数）；导出时手动烟测
+- DP-1.1 标题页自动进入 ✅ **已完成 (2025-10-27)**
+  - 修改点：在 deterministicInput.ts 注入脚本中，每 100ms 检测 '.title__enter-game-target' 并自动点击
+  - 验收：不手动点击可进入游戏 ✅
+  - 单测：待补充
   - 影响：仅注入层
   - 回滚：移除注入段
+  - **提交**: 00b7b1cf
 
 - DP-1.2 自动推进下一句
   - 修改点：在捕获期间周期性调用 Page.keyboard.press('Space')（或触发 WebGAL.events.userInteractNext），节流 200–300ms；检测阻塞演出时暂停
@@ -185,10 +186,31 @@
 ---
 
 ## 8. 任务甘特（建议顺序）
-1) DP-1.1, DP-1.2, DP-1.3（打通流程）
-2) DP-2.1, DP-2.2, DP-2.3, DP-2.4（音频第一批）
-3) DP-3.1, DP-3.2, DP-3.3（BGM 增强）
-4) DP-4.1, DP-4.2（CLI/日志）
+1) DP-1.1, DP-1.2, DP-1.3（打通流程）✅ **已完成 (2025-10-27)**
+2) DP-2.1, DP-2.2, DP-2.3, DP-2.4（音频第一批）✅ **已完成 (2025-10-27)**
+3) DP-3.1, DP-3.2, DP-3.3（BGM 增强）⏳ **待实现**
+4) DP-4.1, DP-4.2（CLI/日志）⏳ **待实现**
+
+### 最新进度 (2025-10-27)
+- ✅ **P0 关键修复已完成并提交**
+  - 提交 00b7b1cf: P0 critical fixes - auto-advance, audio capture, completion detection
+  - 提交 4fef189a: TypeScript 编译修复
+  - 构建验证通过 ✅
+
+- **已完成任务**:
+  - DP-1.1: 标题页自动进入 ✅
+  - DP-1.2: 自动推进下一句 ✅
+  - DP-1.3: 完成判定修正 ✅
+  - DP-2.1: 监听 vocal（#currentVocal）✅
+  - DP-2.2: 捕获 SE（playEffect）✅
+  - DP-2.3: 捕获视频音轨 ✅
+  - DP-2.4: UI SE 捕获（Redux store）✅
+
+- **待实现任务**:
+  - DP-1.4: CLI 文本/自动速度注入
+  - DP-3.x: BGM 增强（淡入淡出、音量曲线、循环）
+  - DP-4.x: CLI 参数与详细日志
+  - 单元测试补充
 
 ---
 
