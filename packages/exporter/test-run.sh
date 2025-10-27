@@ -38,7 +38,7 @@ run_test() {
   echo ""
   
   # 构建命令
-  local cmd="node build/index.js $scene_file -o $output_file -v"
+  local cmd="node build/cli/index.js export $scene_file -o $output_file -u http://localhost:3001 -v"
   if [ -n "$branch_file" ]; then
     cmd="$cmd -b $branch_file"
   fi
