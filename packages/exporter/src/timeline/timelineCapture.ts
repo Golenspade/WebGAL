@@ -331,7 +331,9 @@ export async function waitForSceneComplete(page: any, timeoutMs = 60000): Promis
       const hasActivePerforms = controller.performList?.length > 0;
 
       // Check for audio activity
+      // @ts-expect-error - document is available in browser context
       const bgmElement = document.getElementById('currentBgm');
+      // @ts-expect-error - document is available in browser context
       const vocalElement = document.getElementById('currentVocal');
       const hasAudioActivity =
         (bgmElement && !bgmElement.paused) ||
