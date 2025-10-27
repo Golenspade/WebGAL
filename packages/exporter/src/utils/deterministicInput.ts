@@ -41,9 +41,18 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
   window.__LAST_SENTENCE_ID__ = -1;
   window.__FAILED_ADVANCE_COUNT__ = 0;
 
+  let checkCount = 0;
   const waitForWebGAL = setInterval(() => {
-    // @ts-expect-error - WebGAL is available in browser context
-    if (typeof WebGAL === 'undefined' || !WebGAL.gameplay?.performController) {
+    checkCount++;
+    const hasWebGAL = typeof WebGAL !== 'undefined';
+    const hasGameplay = hasWebGAL && WebGAL.gameplay;
+    const hasController = hasGameplay && WebGAL.gameplay.performController;
+
+    if (checkCount % 50 === 0) {
+      console.log('[Auto] Waiting for WebGAL... (check:', checkCount, 'WebGAL:', hasWebGAL, 'gameplay:', hasGameplay, 'controller:', hasController, ')');
+    }
+
+    if (!hasController) {
       return;
     }
     clearInterval(waitForWebGAL);
@@ -54,9 +63,7 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
     const autoAdvanceInterval = setInterval(() => {
       if (!window.__AUTO_ADVANCE_ENABLED__) return;
 
-      // @ts-expect-error - WebGAL is available in browser context
       const controller = WebGAL.gameplay.performController;
-      // @ts-expect-error - WebGAL is available in browser context
       const sceneData = WebGAL.sceneManager?.sceneData;
       const hasActivePerforms = controller?.performList?.length > 0;
 
@@ -65,9 +72,7 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       const showTitle = GUIState?.showTitle;
 
       // Check if there are interactive elements (choices or inputs)
-      // @ts-expect-error - document is available in browser context
       const hasChoice = document.querySelector('.Choose_item') !== null;
-      // @ts-expect-error - document is available in browser context
       const hasInput = document.querySelector('#user-input') !== null;
 
       // Cooldown mechanism: prevent rapid-fire advances
@@ -107,7 +112,6 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
             bubbles: true,
             cancelable: true
           });
-          // @ts-expect-error - document is available in browser context
           document.dispatchEvent(event);
 
           // Also dispatch keyup to prevent lock
@@ -120,7 +124,6 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
               bubbles: true,
               cancelable: true
             });
-            // @ts-expect-error - document is available in browser context
             document.dispatchEvent(eventUp);
           }, 50);
 
