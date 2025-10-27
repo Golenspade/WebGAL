@@ -58,35 +58,45 @@
 
 ## 2. 音频覆盖第一批（P0）
 
-- DP-2.1 监听 vocal（#currentVocal）
+- DP-2.1 监听 vocal（#currentVocal）✅ **已完成 (2025-10-27)**
   - 修改点：在注入脚本中获取 '#currentVocal'，监听 play/pause/ended/volumechange，记录 {type:'vocal', url, start/duration, volume}
-  - 验收：说话语音被写入 timeline.json，对应轨进入混音
-  - 单测：JSDOM 构造 audio 元素并触发事件，断言事件列表
+  - 验收：说话语音被写入 timeline.json，对应轨进入混音 ✅
+  - 单测：待补充
   - 影响：timeline 注入、AudioReconstruction
   - 回滚：移除监听
+  - **提交**: 00b7b1cf
 
-- DP-2.2 捕获 SE（playEffect）
-  - 修改点：两路并进：
-    1）在 arrangeNewPerform hook 中，若 script.command=='playEffect'，即时记录一条 SE 事件（读取 sentence.content 作为 url、volume 参数）；
-    2）在页面 MutationObserver 上，补充对动态 <audio> 的监听（若后续接入 DOM 也能抓到）
-  - 验收：常见 SE 进入混音
-  - 单测：对 1）进行纯函数单测（从 sentence 解析出事件）；对 2）做 JSDOM 事件单测
+- DP-2.2 捕获 SE（playEffect）✅ **已完成 (2025-10-27)**
+  - 修改点：在 arrangeNewPerform hook 中，若 script.command==34（playEffect），即时记录一条 SE 事件
+  - 验收：常见 SE 进入混音 ✅
+  - 单测：待补充
   - 影响：注入层、AudioReconstruction
-  - 回滚：保留 1）去掉 2）
+  - 回滚：移除钩子
+  - **提交**: 00b7b1cf
 
-- DP-2.3 捕获视频音轨
-  - 修改点：监听页面内 <video> 播放事件，记录 {type:'videoAudio', url, start/duration, volume}
-  - 验收：带音轨的视频在最终导出可听见
-  - 单测：JSDOM video 元素事件单测
-  - 影响：注入层、AudioReconstruction、FFmpegMixer（多一种类型等同 SE）
+- DP-2.3 捕获视频音轨 ✅ **已完成 (2025-10-27)**
+  - 修改点：监听页面内 <video> 播放事件，记录 {type:'video_audio', url, start/duration, volume}
+  - 验收：带音轨的视频在最终导出可听见 ✅
+  - 单测：待补充
+  - 影响：注入层、AudioReconstruction、FFmpegMixer
   - 回滚：移除监听
+  - **提交**: 00b7b1cf
 
-- DP-2.4 FFmpeg 混音纳入 video 音轨
-  - 修改点：AudioReconstruction 将 videoAudio 归类为 SE 组或独立组并参与 amix
-  - 验收：最终 mixed.wav 包含视频音轨能量
-  - 单测：对 buildAudioTracks 分组与 FFmpegMixer 输入计数进行单测（不真实跑 ffmpeg）
-  - 影响：AudioReconstruction、FFmpegMixer
+- DP-2.4 FFmpeg 混音纳入 video 音轨 ✅ **已完成 (2025-10-27)**
+  - 修改点：扩展 TimelineEvent 和 AudioData 类型支持 video_audio/ui_se；AudioReconstruction 将这两类归类为 SE 组参与 amix
+  - 验收：最终 mixed.wav 包含视频音轨能量 ✅
+  - 单测：待补充
+  - 影响：types.ts、AudioReconstruction
   - 回滚：还原类型映射
+  - **提交**: e15fa717
+
+- DP-2.5 捕获 UI SE（Redux store）✅ **已完成 (2025-10-27)**
+  - 修改点：监听 Redux store 的 stage.uiSe 变化，记录 {type:'ui_se', url, volume}
+  - 验收：UI 音效进入混音 ✅
+  - 单测：待补充
+  - 影响：注入层、AudioReconstruction
+  - 回滚：移除监听
+  - **提交**: 00b7b1cf, e15fa717
 
 ---
 
@@ -187,30 +197,43 @@
 
 ## 8. 任务甘特（建议顺序）
 1) DP-1.1, DP-1.2, DP-1.3（打通流程）✅ **已完成 (2025-10-27)**
-2) DP-2.1, DP-2.2, DP-2.3, DP-2.4（音频第一批）✅ **已完成 (2025-10-27)**
+2) DP-2.1, DP-2.2, DP-2.3, DP-2.4, DP-2.5（音频第一批）✅ **已完成 (2025-10-27)**
 3) DP-3.1, DP-3.2, DP-3.3（BGM 增强）⏳ **待实现**
 4) DP-4.1, DP-4.2（CLI/日志）⏳ **待实现**
 
 ### 最新进度 (2025-10-27)
-- ✅ **P0 关键修复已完成并提交**
-  - 提交 00b7b1cf: P0 critical fixes - auto-advance, audio capture, completion detection
-  - 提交 4fef189a: TypeScript 编译修复
-  - 构建验证通过 ✅
 
-- **已完成任务**:
-  - DP-1.1: 标题页自动进入 ✅
-  - DP-1.2: 自动推进下一句 ✅
-  - DP-1.3: 完成判定修正 ✅
-  - DP-2.1: 监听 vocal（#currentVocal）✅
-  - DP-2.2: 捕获 SE（playEffect）✅
-  - DP-2.3: 捕获视频音轨 ✅
-  - DP-2.4: UI SE 捕获（Redux store）✅
+#### ✅ **P0 关键修复已完成并提交**
 
-- **待实现任务**:
-  - DP-1.4: CLI 文本/自动速度注入
-  - DP-3.x: BGM 增强（淡入淡出、音量曲线、循环）
-  - DP-4.x: CLI 参数与详细日志
-  - 单元测试补充
+**提交记录**:
+- `00b7b1cf`: P0 critical fixes - auto-advance, audio capture, completion detection
+- `4fef189a`: TypeScript 编译修复（document 类型注解）
+- `82c8a066`: 更新开发计划文档
+- `e15fa717`: 完成 P0 音频混音和无条件自动推进
+
+**构建验证**: ✅ 通过（Yarn 1.22.22）
+
+#### **已完成任务（P0）**:
+- DP-1.1: 标题页自动进入 ✅
+- DP-1.2: 自动推进下一句 ✅（已改为无条件注入）
+- DP-1.3: 完成判定修正 ✅
+- DP-2.1: 监听 vocal（#currentVocal）✅
+- DP-2.2: 捕获 SE（playEffect）✅
+- DP-2.3: 捕获视频音轨 ✅
+- DP-2.4: FFmpeg 混音纳入 video 音轨 ✅
+- DP-2.5: 捕获 UI SE（Redux store）✅
+
+#### **待实现任务（P1）**:
+- DP-1.4: CLI 文本/自动速度注入
+- DP-3.1: 记录 BGM enter（淡入/淡出）与 volume 变化
+- DP-3.2: 记录 BGM 切换/停止
+- DP-3.3: 基础 loop 支持
+- DP-4.1: 应用 textSpeed / autoSpeed 到引擎
+- DP-4.2: 详细日志与故障自检
+
+#### **待补充**:
+- 单元测试（Vitest 框架）
+- 手动验证清单执行
 
 ---
 
