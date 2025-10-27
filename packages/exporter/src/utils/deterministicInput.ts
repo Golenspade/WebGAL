@@ -63,8 +63,9 @@ export const DETERMINISTIC_INPUT_SCRIPT = `
       const hasInput = document.querySelector('#user-input') !== null;
 
       // Cooldown mechanism: prevent rapid-fire advances
-      const COOLDOWN_MS = 600; // Minimum time between advances
-      const BACKOFF_MS = 2000;  // Backoff time after failed advances
+      // Configurable via window.__AUTO_COOLDOWN__ and window.__AUTO_BACKOFF__ for DP-1.4 integration
+      const COOLDOWN_MS = (window as any).__AUTO_COOLDOWN__ ?? 600; // Minimum time between advances
+      const BACKOFF_MS = (window as any).__AUTO_BACKOFF__ ?? 2000;  // Backoff time after failed advances
       const now = Date.now();
 
       // If we failed to advance multiple times, use longer backoff
