@@ -2,14 +2,26 @@
 
 Export WebGAL visual novel scenes to video files (.mov, .mp4, .webm).
 
+## ✨ Recent Fixes (2025-10-27)
+
+**P0 Critical Issues Fixed:**
+- ✅ **Auto-enter game**: Automatically clicks title screen to start
+- ✅ **Auto-advance dialogue**: Simulates space key to progress through say commands
+- ✅ **Fixed selectors**: Corrected choice (`.Choose_item`) and input (`#user-input`) selectors
+- ✅ **Complete audio capture**: Now captures vocal, SE, UI SE, and video audio tracks
+- ✅ **Improved completion detection**: No longer stops prematurely during dialogue waits
+
+See [FIXES_SUMMARY.md](./FIXES_SUMMARY.md) for detailed technical information.
+
 ## Features
 
 - 🎬 Export full scenes with animations, transitions, and effects
-- 🎵 Automatic audio mixing (BGM, vocals, sound effects)
+- 🎵 Automatic audio mixing (BGM, vocals, sound effects, UI sounds)
 - 📹 High-quality video encoding (ProRes, H.264, VP9)
 - 🎮 Deterministic branch handling for automated exports
 - ⚡ Headless browser capture using Playwright
 - 🔧 Configurable resolution, frame rate, and quality
+- 🤖 Fully automated - no manual interaction required
 
 ## Installation
 
@@ -28,7 +40,26 @@ yarn build
 yarn dev
 ```
 
-### 2. Export a Scene
+### 2. Run Test Scenes (Recommended)
+
+Test the exporter with provided test scenes:
+
+```bash
+# Test basic functionality (auto-advance, audio capture)
+yarn export test-scenes/test-basic.txt -o test-basic.mp4 -v
+
+# Test choice automation
+yarn export test-scenes/test-choice.txt \
+  -b test-scenes/test-choice-branch.json \
+  -o test-choice.mp4 -v
+
+# Test input automation
+yarn export test-scenes/test-input.txt \
+  -b test-scenes/test-input-branch.json \
+  -o test-input.mp4 -v
+```
+
+### 3. Export Your Own Scene
 
 ```bash
 # Using the CLI

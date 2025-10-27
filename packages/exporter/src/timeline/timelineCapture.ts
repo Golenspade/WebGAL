@@ -69,15 +69,35 @@ export const TIMELINE_INJECTION_SCRIPT = `
           },
         });
 
+        // Special handling for playEffect (SE) - commandType 34
+        // SE audio elements are not inserted into DOM, so we need to capture them here
+        if (script?.command === 34) { // commandType.playEffect
+          const url = script.content;
+          const volume = script.args?.find(arg => arg.key === 'volume')?.value || 100;
+          const isLoop = script.args?.find(arg => arg.key === 'id')?.value ? true : false;
+
+          window.__logTimelineEvent__({
+            type: 'se',
+            startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
+            duration: -1, // SE duration is unknown until it ends
+            data: {
+              audioType: 'se',
+              url: url,
+              volume: volume,
+              loop: isLoop,
+            },
+          });
+        }
+
         // Call original
         return originalArrangeNewPerform(perform, script, syncPerformState);
       };
 
       console.log('[Exporter] Successfully hooked arrangeNewPerform');
 
-      // Observe audio elements for BGM and vocal tracking
+      // Observe audio elements for BGM, vocal, and video tracking
       const observeAudioElements = () => {
-        // Track existing audio
+        // Track BGM element
         const bgmElement = document.getElementById('currentBgm');
         if (bgmElement) {
           bgmElement.addEventListener('play', function() {
@@ -86,7 +106,7 @@ export const TIMELINE_INJECTION_SCRIPT = `
               window.__logTimelineEvent__({
                 type: 'bgm',
                 startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
-                duration: -1,
+                duration: -1, // BGM duration is unknown, will be estimated
                 data: {
                   audioType: 'bgm',
                   url: src,
@@ -96,32 +116,91 @@ export const TIMELINE_INJECTION_SCRIPT = `
               });
             }
           });
+
+          // Track BGM volume changes (for fade in/out)
+          bgmElement.addEventListener('volumechange', function() {
+            console.log('[Exporter] BGM volume changed to', this.volume);
+            // TODO: Record volume change events for accurate timeline
+          });
+
+          // Track BGM pause/stop
+          bgmElement.addEventListener('pause', function() {
+            console.log('[Exporter] BGM paused');
+            // TODO: Record BGM stop event
+          });
         }
 
-        // Observe for new audio elements
+        // Track Vocal element (currentVocal)
+        const vocalElement = document.getElementById('currentVocal');
+        if (vocalElement) {
+          vocalElement.addEventListener('play', function() {
+            const src = this.src;
+            if (src && !src.includes('blob:')) {
+              window.__logTimelineEvent__({
+                type: 'vocal',
+                startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
+                duration: (this.duration || 0) * 1000,
+                data: {
+                  audioType: 'vocal',
+                  url: src,
+                  volume: this.volume * 100,
+                  loop: this.loop,
+                },
+              });
+            }
+          });
+
+          vocalElement.addEventListener('ended', function() {
+            console.log('[Exporter] Vocal ended');
+          });
+        }
+
+        // Observe for video elements (for video audio tracks)
+        const observeVideos = () => {
+          const videos = document.querySelectorAll('video');
+          videos.forEach((videoElement) => {
+            videoElement.addEventListener('play', function() {
+              const src = this.src || this.currentSrc;
+              if (src && !src.includes('blob:')) {
+                window.__logTimelineEvent__({
+                  type: 'video_audio',
+                  startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
+                  duration: (this.duration || 0) * 1000,
+                  data: {
+                    audioType: 'video',
+                    url: src,
+                    volume: this.volume * 100,
+                    loop: this.loop,
+                  },
+                });
+              }
+            });
+          });
+        };
+
+        observeVideos();
+
+        // Observe for new video elements
         const observer = new MutationObserver((mutations) => {
           mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
-              if (node.nodeName === 'AUDIO') {
-                const audioElement = node;
-                audioElement.addEventListener('play', function() {
-                  const src = this.src;
-                  if (!src || src.includes('blob:')) return;
-
-                  const isVocal = this.className?.includes('vocal') ||
-                                  this.id?.includes('vocal');
-
-                  window.__logTimelineEvent__({
-                    type: isVocal ? 'vocal' : 'se',
-                    startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
-                    duration: (this.duration || 0) * 1000,
-                    data: {
-                      audioType: isVocal ? 'vocal' : 'se',
-                      url: src,
-                      volume: this.volume * 100,
-                      loop: this.loop,
-                    },
-                  });
+              if (node.nodeName === 'VIDEO') {
+                const videoElement = node;
+                videoElement.addEventListener('play', function() {
+                  const src = this.src || this.currentSrc;
+                  if (src && !src.includes('blob:')) {
+                    window.__logTimelineEvent__({
+                      type: 'video_audio',
+                      startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
+                      duration: (this.duration || 0) * 1000,
+                      data: {
+                        audioType: 'video',
+                        url: src,
+                        volume: this.volume * 100,
+                        loop: this.loop,
+                      },
+                    });
+                  }
                 });
               }
             });
@@ -129,10 +208,36 @@ export const TIMELINE_INJECTION_SCRIPT = `
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
-        console.log('[Exporter] Audio observer installed');
+        console.log('[Exporter] Audio and video observer installed');
       };
 
       observeAudioElements();
+
+      // Monitor Redux store for UI sound effects
+      // UI SE is triggered via store.dispatch(setStage({ key: 'uiSe', value: url }))
+      if (window.webgalStore) {
+        let previousUiSe = '';
+        window.webgalStore.subscribe(() => {
+          const state = window.webgalStore.getState();
+          const currentUiSe = state?.stage?.uiSe;
+
+          if (currentUiSe && currentUiSe !== previousUiSe && currentUiSe !== '') {
+            window.__logTimelineEvent__({
+              type: 'ui_se',
+              startTime: Date.now() - window.__EXPORT_TIMELINE__.startTime,
+              duration: -1, // UI SE duration is unknown
+              data: {
+                audioType: 'ui_se',
+                url: currentUiSe,
+                volume: 50, // Default UI SE volume
+                loop: false,
+              },
+            });
+            previousUiSe = currentUiSe;
+          }
+        });
+        console.log('[Exporter] UI SE monitor installed');
+      }
 
       // Mark scene as started
       window.__EXPORT_TIMELINE__.sceneStarted = true;
@@ -188,26 +293,81 @@ export async function extractTimeline(page: any): Promise<TimelineCapture> {
 /**
  * Wait for scene to complete
  * NOTE: This is used to determine when to STOP capturing, not when to START
+ *
+ * Improved logic:
+ * - Don't just check if performList is empty (dialogue waits have empty performList)
+ * - Check if we're back at title screen (showTitle = true)
+ * - Check if scene has ended (end command)
+ * - Check for sustained idle period (no performs, no audio, no text changes)
  */
 export async function waitForSceneComplete(page: any, timeoutMs = 60000): Promise<void> {
   const startTime = Date.now();
+  let lastActivityTime = Date.now();
+  let lastSentenceId = -1;
+  let idleCount = 0;
+  const IDLE_THRESHOLD = 30; // 30 checks * 100ms = 3 seconds of idle
 
   // Poll for scene completion
   while (Date.now() - startTime < timeoutMs) {
-    const isComplete = await page.evaluate(() => {
+    const status = await page.evaluate(() => {
       // @ts-expect-error - window is available in browser context
-      if (!window.WebGAL?.gameplay?.performController) return false;
+      if (!window.WebGAL?.gameplay?.performController) return { complete: false, reason: 'not_loaded' };
 
-      // Check if all performs are done
       // @ts-expect-error - window is available in browser context
       const controller = window.WebGAL.gameplay.performController;
+      // @ts-expect-error - window is available in browser context
+      const GUIState = window.webgalStore?.getState?.()?.GUI;
+      // @ts-expect-error - window is available in browser context
+      const sceneData = window.WebGAL.sceneManager?.sceneData;
+
+      // Check if we're back at title screen
+      if (GUIState?.showTitle === true) {
+        return { complete: true, reason: 'title_screen' };
+      }
+
+      // Check if scene has ended (reached end of sentence list)
+      const currentSentenceId = sceneData?.currentSentenceId || 0;
+      const totalSentences = sceneData?.currentScene?.sentenceList?.length || 0;
       const hasActivePerforms = controller.performList?.length > 0;
 
-      return !hasActivePerforms;
+      // Check for audio activity
+      const bgmElement = document.getElementById('currentBgm');
+      const vocalElement = document.getElementById('currentVocal');
+      const hasAudioActivity =
+        (bgmElement && !bgmElement.paused) ||
+        (vocalElement && !vocalElement.paused);
+
+      return {
+        complete: false,
+        hasActivePerforms,
+        hasAudioActivity,
+        currentSentenceId,
+        totalSentences,
+        atEnd: currentSentenceId >= totalSentences - 1,
+      };
     });
 
-    if (isComplete) {
-      // Wait a bit more for final renders
+    if (status.complete) {
+      console.log(`[Exporter] Scene complete: ${status.reason}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return;
+    }
+
+    // Track activity
+    const hasActivity = status.hasActivePerforms || status.hasAudioActivity;
+    const sentenceChanged = status.currentSentenceId !== lastSentenceId;
+
+    if (hasActivity || sentenceChanged) {
+      lastActivityTime = Date.now();
+      idleCount = 0;
+      lastSentenceId = status.currentSentenceId;
+    } else {
+      idleCount++;
+    }
+
+    // If we've been idle for long enough AND we're at the end of the scene, consider it complete
+    if (idleCount >= IDLE_THRESHOLD && status.atEnd) {
+      console.log('[Exporter] Scene complete: sustained idle at end of scene');
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return;
     }

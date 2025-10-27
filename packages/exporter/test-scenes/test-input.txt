@@ -1,0 +1,17 @@
+; WebGAL Exporter - 输入测试场景
+; 测试用户输入自动化
+
+; 场景开始
+欢迎来到输入测试场景！;
+
+; 测试输入
+getUserInput:userName -title:请输入你的名字 -buttonText:确定 -defaultValue:玩家;
+
+; 使用输入的值
+你好，{userName}！;
+很高兴认识你。;
+
+; 场景结束
+输入测试完成！;
+end;
+

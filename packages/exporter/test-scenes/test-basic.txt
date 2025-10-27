@@ -1,0 +1,27 @@
+; WebGAL Exporter - 基础功能测试场景
+; 测试自动进入游戏、对话推进、音频捕获
+
+; 场景开始
+欢迎使用 WebGAL Exporter！;
+这是一个测试场景，用于验证导出功能。;
+
+; 测试背景和 BGM
+changeBg:bg.jpg -next;
+bgm:bgm.mp3 -next;
+
+; 测试对话推进
+第一句对话。;
+第二句对话。;
+第三句对话。;
+
+; 测试语音
+这是一句带语音的对话。 -vocal:voice.mp3;
+
+; 测试音效
+playEffect:se.mp3 -next;
+音效已播放。;
+
+; 场景结束
+测试完成！;
+end;
+

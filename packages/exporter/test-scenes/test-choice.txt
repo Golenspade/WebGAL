@@ -1,0 +1,33 @@
+; WebGAL Exporter - 选择分支测试场景
+; 测试选择自动化和分支跳转
+
+; 场景开始
+欢迎来到选择测试场景！;
+
+; 第一个选择
+请选择一个选项：;
+choose:选项 A:label_a|选项 B:label_b|选项 C:label_c;
+
+; 选项 A 分支
+label:label_a;
+你选择了选项 A。;
+这是 A 分支的内容。;
+jumpLabel:end_scene;
+
+; 选项 B 分支
+label:label_b;
+你选择了选项 B。;
+这是 B 分支的内容。;
+jumpLabel:end_scene;
+
+; 选项 C 分支
+label:label_c;
+你选择了选项 C。;
+这是 C 分支的内容。;
+jumpLabel:end_scene;
+
+; 场景结束
+label:end_scene;
+选择测试完成！;
+end;
+
